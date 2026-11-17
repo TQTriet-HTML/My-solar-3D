@@ -1,1 +1,0 @@
-# My-solar-3D
