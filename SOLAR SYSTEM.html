@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mô Phỏng Hệ Mặt Trời 3D - Interactive Solar System</title>
+  <style>
+    :root {
+      --bg-panel: rgba(11, 17, 32, 0.84);
+      --border: rgba(148, 163, 184, 0.2);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --gold: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #02040a;
+      color: var(--text);
+      overflow: hidden;
+      user-select: none;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* Nhãn tên hành tinh nổi trên không gian 3D */
+    #labels-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      overflow: hidden;
+    }
+    .planet-label {
+      position: absolute;
+      transform: translate(-50%, -140%);
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: #e2e8f0;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      padding: 2px 7px;
+      border-radius: 999px;
+      pointer-events: auto;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
+    }
+    .planet-label:hover, .planet-label.active {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: var(--accent);
+      color: #fff;
+      transform: translate(-50%, -145%) scale(1.06);
+    }
+
+    /* Thanh tiêu đề & chọn nhanh */
+    header {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .brand, .quick-nav {
+      pointer-events: auto;
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+    }
+    .brand h1 { font-size: 0.98rem; color: var(--accent); letter-spacing: 0.3px; }
+    .brand p { font-size: 0.74rem; color: var(--muted); }
+    .quick-nav {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    .nav-btn {
+      background: rgba(30, 41, 59, 0.75);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.76rem;
+      padding: 5px 9px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .nav-btn:hover, .nav-btn.active {
+      background: rgba(56, 189, 248, 0.22);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Bảng điều khiển mô phỏng phía dưới */
+    .controls-bar {
+      position: fixed;
+      bottom: 16px;
+      left: 14px;
+      z-index: 5;
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+    }
+    .control-group { display: flex; align-items: center; gap: 8px; }
+    input[type="range"] { accent-color: var(--accent); cursor: pointer; width: 100px; }
+    .toggle-btn {
+      background: #1e293b;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.78rem;
+    }
+    .toggle-btn.on { border-color: var(--accent); color: var(--accent); }
+
+    /* Bảng thông tin chi tiết thực thể bên phải */
+    #info-drawer {
+      position: fixed;
+      top: 76px;
+      right: 14px;
+      bottom: 16px;
+      width: 340px;
+      max-width: calc(100vw - 28px);
+      z-index: 6;
+      background: var(--bg-panel);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      overflow-y: auto;
+      transform: translateX(380px);
+      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #info-drawer.open { transform: translateX(0); }
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .drawer-header h2 { font-size: 1.2rem; color: #fff; }
+    .drawer-type { font-size: 0.76rem; color: var(--accent); margin-top: 2px; }
+    .close-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    .close-btn:hover { color: #fff; border-color: #fff; }
+    .desc {
+      font-size: 0.84rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+      margin-bottom: 14px;
+    }
+    .specs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .spec-item {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .spec-item span { display: block; font-size: 0.7rem; color: var(--muted); }
+    .spec-item strong { display: block; font-size: 0.85rem; color: #f1f5f9; margin-top: 2px; }
+    .fact-box {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 3px solid var(--accent);
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="labels-layer"></div>
+
+  <header>
+    <div class="brand">
+      <h1>Solar System 3D Explorer</h1>
+      <p>Kéo chuột xoay • Cuộn để thu phóng • Nhấp vào thiên thể để xem dữ liệu</p>
+    </div>
+    <nav class="quick-nav" id="quickNav"></nav>
+  </header>
+
+  <div class="controls-bar">
+    <div class="control-group">
+      <button class="toggle-btn on" id="pauseBtn">Đang chạy</button>
+    </div>
+    <div class="control-group">
+      <label for="speedSlider">Tốc độ quỹ đạo:</label>
+      <input type="range" id="speedSlider" min="0" max="5" step="0.1" value="1" />
+      <span id="speedLabel">1.0x</span>
+    </div>
+    <div class="control-group">
+      <button class="toggle-btn on" id="orbitToggle">Quỹ đạo</button>
+      <button class="toggle-btn on" id="labelToggle">Nhãn tên</button>
+      <button class="toggle-btn" id="resetViewBtn">Toàn cảnh</button>
+    </div>
+  </div>
+
+  <aside id="info-drawer">
+    <div class="drawer-header">
+      <div>
+        <h2 id="infoName">--</h2>
+        <div class="drawer-type" id="infoType">--</div>
+      </div>
+      <button class="close-btn" id="closeDrawer" title="Đóng">✕</button>
+    </div>
+    <p class="desc" id="infoDesc"></p>
+    <div class="specs-grid" id="infoSpecs"></div>
+    <div class="fact-box" id="infoFact"></div>
+  </aside>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script>
+    // 1. CƠ SỞ DỮ LIỆU THIÊN VĂN CỦA CÁC THỰC THỂ TRONG HỆ MẶT TRỜI
+    const SOLAR_BODIES = [
+      {
+        id: "sun",
+        name: "Mặt Trời",
+        type: "Sao lùn vàng (Quang phổ G2V)",
+        visualRadius: 9.5,
+        distance: 0,
+        orbitSpeed: 0,
+        rotationSpeed: 0.004,
+        tilt: 7.25,
+        textureStyle: "sun",
+        colors: ["#fff7ed", "#fbbf24", "#ea580c"],
+        desc: "Ngôi sao trung tâm chiếm tới 99,86% tổng khối lượng của toàn bộ Hệ Mặt Trời. Năng lượng của Mặt Trời sinh ra từ phản ứng nhiệt hạch tổng hợp Hydro thành Heli tại lõi ở nhiệt độ 15 triệu °C.",
+        specs: {
+          "Bán kính thực": "696.340 km (109x Trái Đất)",
+          "Khối lượng": "1,989 × 10³⁰ kg",
+          "Nhiệt độ bề mặt": "5.500 °C (Quang quyển)",
+          "Chu kỳ tự quay": "25,4 ngày (tại xích đạo)",
+          "Tuổi ước tính": "4,6 tỷ năm",
+          "Thành phần chính": "73% Hydro, 25% Heli"
+        },
+        fact: "Ánh sáng từ bề mặt Mặt Trời mất khoảng 8 phút 20 giây để truyền tới Trái Đất, nhưng một photon sinh ra ở lõi phải mất hàng chục nghìn năm mới thoát ra được bề mặt."
+      },
+      {
+        id: "mercury",
+        name: "Sao Thủy",
+        type: "Hành tinh đất đá • Hành tinh thứ 1",
+        visualRadius: 1.3,
+        distance: 18,
+        orbitSpeed: 0.041,
+        rotationSpeed: 0.003,
+        tilt: 0.03,
+        textureStyle: "crater",
+        colors: ["#9ca3af", "#6b7280", "#4b5563"],
+        desc: "Hành tinh nhỏ nhất và nằm gần Mặt Trời nhất. Do hầu như không có khí quyển giữ nhiệt, bề mặt Sao Thủy trải qua mức chênh lệch nhiệt độ khắc nghiệt nhất Hệ Mặt Trời.",
+        specs: {
+          "Khoảng cách TB": "57,9 triệu km (0,39 AU)",
+          "Chu kỳ quỹ đạo": "88 ngày Trái Đất",
+          "Chu kỳ tự quay": "58,6 ngày Trái Đất",
+          "Bán kính thực": "2.439,7 km",
+          "Nhiệt độ": "-180 °C đến 430 °C",
+          "Vệ tinh tự nhiên": "0"
+        },
+        fact: "Một ngày Mặt Trời trên Sao Thủy (từ bình minh này đến bình minh kế tiếp) kéo dài 176 ngày Trái Đất—dài gấp đôi một năm của chính nó."
+      },
+      {
+        id: "venus",
+        name: "Sao Kim",
+        type: "Hành tinh đất đá • Hành tinh thứ 2",
+        visualRadius: 2.1,
+        distance: 26,
+        orbitSpeed: 0.016,
+        rotationSpeed: -0.002,
+        tilt: 177.3,
+        textureStyle: "banded",
+        colors: ["#fef3c7", "#f59e0b", "#b45309"],
+        desc: "Thường được gọi là 'chị em song sinh' của Trái Đất về kích thước, nhưng Sao Kim bị bao phủ bởi lớp mây axit sunfuric dày đặc gây hiệu ứng nhà kính mất kiểm soát.",
+        specs: {
+          "Khoảng cách TB": "108,2 triệu km (0,72 AU)",
+          "Chu kỳ quỹ đạo": "224,7 ngày Trái Đất",
+          "Chu kỳ tự quay": "243 ngày (quay nghịch)",
+          "Bán kính thực": "6.051,8 km",
+          "Nhiệt độ TB": "465 °C (nóng nhất hệ)",
+          "Áp suất bề mặt": "92 lần Trái Đất"
+        },
+        fact: "Sao Kim tự quay quanh trục theo chiều ngược lại (từ Đông sang Tây) so với hầu hết các hành tinh khác, nên trên Sao Kim, Mặt Trời mọc ở hướng Tây và lặn ở hướng Đông."
+      },
+      {
+        id: "earth",
+        name: "Trái Đất",
+        type: "Hành tinh đất đá • Hành tinh thứ 3",
+        visualRadius: 2.3,
+        distance: 36,
+        orbitSpeed: 0.01,
+        rotationSpeed: 0.02,
+        tilt: 23.44,
+        textureStyle: "earth",
+        colors: ["#1d4ed8", "#15803d", "#f8fafc"],
+        desc: "Hành tinh duy nhất được biết đến có nước lỏng ổn định trên bề mặt (chiếm 71% diện tích) và duy trì sự sống nhờ từ trường mạnh cùng bầu khí quyển giàu Nitơ - Oxy.",
+        specs: {
+          "Khoảng cách TB": "149,6 triệu km (1,00 AU)",
+          "Chu kỳ quỹ đạo": "365,25 ngày",
+          "Chu kỳ tự quay": "23 giờ 56 phút 4 giây",
+          "Bán kính thực": "6.371 km",
+          "Nhiệt độ TB": "15 °C",
+          "Vệ tinh tự nhiên": "1 (Mặt Trăng)"
+        },
+        fact: "Độ nghiêng trục 23,44° của Trái Đất không chỉ tạo ra bốn mùa Xuân - Hạ - Thu - Đông rõ rệt mà còn được giữ ổn định nhờ lực hấp dẫn của Mặt Trăng."
+      },
+      {
+        id: "mars",
+        name: "Sao Hỏa",
+        type: "Hành tinh đất đá • Hành tinh thứ 4",
+        visualRadius: 1.7,
+        distance: 47,
+        orbitSpeed: 0.0053,
+        rotationSpeed: 0.019,
+        tilt: 25.19,
+        textureStyle: "rocky",
+        colors: ["#ea580c", "#9a3412", "#fed7aa"],
+        desc: "Hành tinh Đỏ mang màu sắc đặc trưng từ oxit sắt (gỉ sắt) phủ khắp bề mặt. Nơi đây sở hữu ngọn núi lửa lớn nhất Hệ Mặt Trời (Olympus Mons) và hẻm núi khổng lồ Valles Marineris.",
+        specs: {
+          "Khoảng cách TB": "227,9 triệu km (1,52 AU)",
+          "Chu kỳ quỹ đạo": "687 ngày Trái Đất",
+          "Chu kỳ tự quay": "24 giờ 37 phút",
+          "Bán kính thực": "3.389,5 km",
+          "Nhiệt độ TB": "-63 °C",
+          "Vệ tinh tự nhiên": "2 (Phobos & Deimos)"
+        },
+        fact: "Núi lửa Olympus Mons trên Sao Hỏa cao gần 22 km—cao gấp gần 2,5 lần đỉnh Everest tính từ mực nước biển."
+      },
+      {
+        id: "jupiter",
+        name: "Sao Mộc",
+        type: "Hành tinh khí khổng lồ • Hành tinh thứ 5",
+        visualRadius: 5.2,
+        distance: 68,
+        orbitSpeed: 0.0022,
+        rotationSpeed: 0.045,
+        tilt: 3.13,
+        textureStyle: "banded",
+        colors: ["#fde68a", "#d97706", "#78350f"],
+        desc: "Hành tinh lớn nhất Hệ Mặt Trời với khối lượng lớn gấp 2,5 lần tất cả các hành tinh còn lại cộng lại. Nổi bật với các dải mây cuộn xoáy và siêu bão Vết Đỏ Lớn tồn tại hàng thế kỷ.",
+        specs: {
+          "Khoảng cách TB": "778,5 triệu km (5,20 AU)",
+          "Chu kỳ quỹ đạo": "11,86 năm Trái Đất",
+          "Chu kỳ tự quay": "9 giờ 55 phút (nhanh nhất)",
+          "Bán kính thực": "69.911 km (11x Trái Đất)",
+          "Nhiệt độ mây": "-110 °C",
+          "Vệ tinh tự nhiên": "95 vệ tinh (Io, Europa...)"
+        },
+        fact: "Vệ tinh Europa của Sao Mộc ẩn chứa một đại dương nước lỏng khổng lồ bên dưới lớp vỏ băng dày, được xem là một trong những ứng viên hàng đầu để tìm kiếm sự sống ngoài Trái Đất."
+      },
+      {
+        id: "saturn",
+        name: "Sao Thổ",
+        type: "Hành tinh khí khổng lồ • Hành tinh thứ 6",
+        visualRadius: 4.4,
+        distance: 92,
+        orbitSpeed: 0.0014,
+        rotationSpeed: 0.04,
+        tilt: 26.73,
+        textureStyle: "banded",
+        colors: ["#fef08a", "#eab308", "#a16207"],
+        rings: { inner: 5.6, outer: 10.2, colors: ["rgba(253,230,138,0.85)", "rgba(180,140,70,0.45)"] },
+        desc: "Viên ngọc của Hệ Mặt Trời với hệ thống vành đai tráng lệ cấu tạo từ hàng tỷ mảnh băng và đá có kích thước từ hạt bụi nhỏ đến cả tảng núi.",
+        specs: {
+          "Khoảng cách TB": "1,43 tỷ km (9,58 AU)",
+          "Chu kỳ quỹ đạo": "29,45 năm Trái Đất",
+          "Chu kỳ tự quay": "10 giờ 33 phút",
+          "Bán kính thực": "58.232 km",
+          "Khối lượng riêng": "0,687 g/cm³ (nhẹ hơn nước)",
+          "Vệ tinh tự nhiên": "146 vệ tinh (Titan, Enceladus...)"
+        },
+        fact: "Hệ thống vành đai chính của Sao Thổ trải rộng tới 282.000 km nhưng độ dày trung bình chỉ khoảng 10 đến 30 mét."
+      },
+      {
+        id: "uranus",
+        name: "Sao Thiên Vương",
+        type: "Hành tinh băng khổng lồ • Hành tinh thứ 7",
+        visualRadius: 3.1,
+        distance: 115,
+        orbitSpeed: 0.0009,
+        rotationSpeed: -0.028,
+        tilt: 97.77,
+        textureStyle: "banded",
+        colors: ["#cffafe", "#22d3ee", "#0891b2"],
+        rings: { inner: 4.0, outer: 5.4, colors: ["rgba(165,243,252,0.4)", "rgba(34,211,238,0.15)"] },
+        desc: "Hành tinh băng khổng lồ mang sắc xanh ngọc bích do khí Metan trong tầng khí quyển trên hấp thụ ánh sáng đỏ. Đây là hành tinh có bầu khí quyển lạnh nhất Hệ Mặt Trời.",
+        specs: {
+          "Khoảng cách TB": "2,87 tỷ km (19,2 AU)",
+          "Chu kỳ quỹ đạo": "84 năm Trái Đất",
+          "Chu kỳ tự quay": "17 giờ 14 phút",
+          "Bán kính thực": "25.362 km",
+          "Nhiệt độ thấp nhất": "-224 °C",
+          "Vệ tinh tự nhiên": "28 vệ tinh"
+        },
+        fact: "Trục tự quay của Sao Thiên Vương nghiêng tới 97,77°, khiến hành tinh này gần như 'nằm ngang' và lăn tròn trên quỹ đạo quanh Mặt Trời."
+      },
+      {
+        id: "neptune",
+        name: "Sao Hải Vương",
+        type: "Hành tinh băng khổng lồ • Hành tinh thứ 8",
+        visualRadius: 3.0,
+        distance: 136,
+        orbitSpeed: 0.0006,
+        rotationSpeed: 0.03,
+        tilt: 28.32,
+        textureStyle: "banded",
+        colors: ["#93c5fd", "#2563eb", "#1e3a8a"],
+        desc: "Hành tinh xa Mặt Trời nhất trong hệ, nổi tiếng với những cơn bão siêu thanh dữ dội nhất Hệ Mặt Trời và màu xanh coban sâu thẳm.",
+        specs: {
+          "Khoảng cách TB": "4,50 tỷ km (30,1 AU)",
+          "Chu kỳ quỹ đạo": "164,8 năm Trái Đất",
+          "Chu kỳ tự quay": "16 giờ 6 phút",
+          "Bán kính thực": "24.622 km",
+          "Tốc độ gió tối đa": "2.100 km/h",
+          "Vệ tinh tự nhiên": "16 vệ tinh (Triton...)"
+        },
+        fact: "Sao Hải Vương là hành tinh đầu tiên được tìm thấy nhờ tính toán toán học trước khi được quan sát trực tiếp qua kính thiên văn vào năm 1846."
+      }
+    ];
+
+    // 2. KHỞI TẠO CẢNH 3D THREE.JS
+    const container = document.getElementById("canvas-container");
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 2500);
+    camera.position.set(0, 85, 165);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.minDistance = 4;
+    controls.maxDistance = 450;
+
+    // Ánh sáng: Nguồn sáng điểm tại Mặt Trời + ánh sáng môi trường dịu
+    const ambientLight = new THREE.AmbientLight(0x334155, 0.75);
+    scene.add(ambientLight);
+    const sunLight = new THREE.PointLight(0xfff7ed, 2.5, 900, 0.4);
+    scene.add(sunLight);
+
+    // 3. TẠO VÂN BỀ MẶT BẰNG CANVAS (PROCEDURAL TEXTURES)
+    function createProceduralTexture(style, colors) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext("2d");
+
+      const grad = ctx.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0, colors[2]);
+      grad.addColorStop(0.5, colors[1]);
+      grad.addColorStop(1, colors[2]);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 256);
+
+      if (style === "sun") {
+        for (let i = 0; i < 650; i++) {
+          ctx.fillStyle = i % 2 === 0 ? "rgba(255, 251, 235, 0.22)" : "rgba(234, 88, 12, 0.25)";
+          ctx.beginPath();
+          ctx.arc(Math.random() * 512, Math.random() * 256, Math.random() * 14 + 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (style === "banded") {
+        for (let y = 0; y < 256; y += 6) {
+          ctx.fillStyle = y % 12 === 0 ? colors[0] : colors[2];
+          ctx.globalAlpha = 0.22 + Math.random() * 0.2;
+          ctx.fillRect(0, y, 512, 3 + Math.random() * 5);
+        }
+        ctx.globalAlpha = 1;
+      } else if (style === "earth") {
+        ctx.fillStyle = colors[0];
+        ctx.fillRect(0, 0, 512, 256);
+        // Vẽ các mảng lục địa
+        ctx.fillStyle = colors[1];
+        for (let i = 0; i < 28; i++) {
+          ctx.beginPath();
+          ctx.ellipse(Math.random() * 512, 35 + Math.random() * 185, 18 + Math.random() * 32, 10 + Math.random() * 22, Math.random(), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Vẽ hai cực băng và dải mây
+        ctx.fillStyle = colors[2];
+        ctx.fillRect(0, 0, 512, 16);
+        ctx.fillRect(0, 240, 512, 16);
+        ctx.globalAlpha = 0.35;
+        for (let i = 0; i < 35; i++) {
+          ctx.fillRect(Math.random() * 512, Math.random() * 256, 40 + Math.random() * 70, 4);
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        for (let i = 0; i < 220; i++) {
+          ctx.fillStyle = i % 2 === 0 ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.12)";
+          ctx.beginPath();
+          ctx.arc(Math.random() * 512, Math.random() * 256, Math.random() * 9 + 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    function createRingTexture(colors) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 32;
+      const ctx = canvas.getContext("2d");
+      const grad = ctx.createLinearGradient(0, 0, 256, 0);
+      grad.addColorStop(0, "rgba(0,0,0,0)");
+      grad.addColorStop(0.2, colors[0]);
+      grad.addColorStop(0.45, colors[1]);
+      grad.addColorStop(0.52, "rgba(0,0,0,0.1)"); // Khe Cassini
+      grad.addColorStop(0.75, colors[0]);
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 32);
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    // 4. DỰNG NỀN SAO & VÀNH ĐAI TIỂU HÀNH TINH
+    (function buildStarfield() {
+      const starGeo = new THREE.BufferGeometry();
+      const count = 3000;
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const r = 650 + Math.random() * 400;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i * 3 + 2] = r * Math.cos(phi);
+      }
+      starGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const starMat = new THREE.PointsMaterial({ color: 0xe2e8f0, size: 1.3, transparent: true, opacity: 0.85 });
+      scene.add(new THREE.Points(starGeo, starMat));
+    })();
+
+    const asteroidBelt = (function buildAsteroidBelt() {
+      const geo = new THREE.BufferGeometry();
+      const count = 1100;
+      const pos = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const radius = 55 + Math.random() * 5.5;
+        const angle = Math.random() * Math.PI * 2;
+        pos[i * 3] = Math.cos(angle) * radius;
+        pos[i * 3 + 1] = (Math.random() - 0.5) * 1.8;
+        pos[i * 3 + 2] = Math.sin(angle) * radius;
+      }
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      const points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.35, transparent: true, opacity: 0.7 }));
+      scene.add(points);
+      return points;
+    })();
+
+    // 5. DỰNG CÁC THỰC THỂ & ĐƯỜNG QUỸ ĐẠO
+    const bodyObjects = [];
+    const orbitLines = [];
+    const clickableMeshes = [];
+    const labelsLayer = document.getElementById("labels-layer");
+    const quickNav = document.getElementById("quickNav");
+
+    SOLAR_BODIES.forEach((data, idx) => {
+      const pivot = new THREE.Object3D();
+      scene.add(pivot);
+
+      const geometry = new THREE.SphereGeometry(data.visualRadius, 48, 32);
+      const texture = createProceduralTexture(data.textureStyle, data.colors);
+      const material = data.id === "sun"
+        ? new THREE.MeshBasicMaterial({ map: texture })
+        : new THREE.MeshStandardMaterial({ map: texture, roughness: 0.75, metalness: 0.05 });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.z = THREE.MathUtils.degToRad(data.tilt);
+      mesh.userData.bodyIndex = idx;
+      pivot.add(mesh);
+      clickableMeshes.push(mesh);
+
+      // Hào quang cho Mặt Trời
+      if (data.id === "sun") {
+        const glowGeo = new THREE.SphereGeometry(data.visualRadius * 1.22, 32, 32);
+        const glowMat = new THREE.MeshBasicMaterial({
+          color: 0xfbbf24,
+          transparent: true,
+          opacity: 0.18,
+          side: THREE.BackSide
+        });
+        mesh.add(new THREE.Mesh(glowGeo, glowMat));
+      }
+
+      // Vành đai cho Sao Thổ & Sao Thiên Vương
+      if (data.rings) {
+        const ringGeo = new THREE.RingGeometry(data.rings.inner, data.rings.outer, 64);
+        // Ánh xạ UV theo bán kính để vân vành đai hiển thị đồng tâm
+        const posAttr = ringGeo.attributes.position;
+        const uvAttr = ringGeo.attributes.uv;
+        for (let i = 0; i < posAttr.count; i++) {
+          const x = posAttr.getX(i);
+          const y = posAttr.getY(i);
+          const dist = Math.sqrt(x * x + y * y);
+          const u = (dist - data.rings.inner) / (data.rings.outer - data.rings.inner);
+          uvAttr.setXY(i, u, 0.5);
+        }
+        const ringMat = new THREE.MeshBasicMaterial({
+          map: createRingTexture(data.rings.colors),
+          transparent: true,
+          side: THREE.DoubleSide
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.rotation.x = Math.PI / 2;
+        mesh.add(ringMesh);
+      }
+
+      // Mặt Trăng quay quanh Trái Đất
+      let moonPivot = null;
+      if (data.id === "earth") {
+        moonPivot = new THREE.Object3D();
+        mesh.add(moonPivot);
+        const moonMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.55, 20, 20),
+          new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.9 })
+        );
+        moonMesh.position.set(4.5, 0, 0);
+        moonPivot.add(moonMesh);
+      }
+
+      // Vẽ vòng quỹ đạo
+      if (data.distance > 0) {
+        const pts = [];
+        for (let a = 0; a <= 128; a++) {
+          const rad = (a / 128) * Math.PI * 2;
+          pts.push(new THREE.Vector3(Math.cos(rad) * data.distance, 0, Math.sin(rad) * data.distance));
+        }
+        const orbitGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        const orbitLine = new THREE.Line(
+          orbitGeo,
+          new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.22 })
+        );
+        scene.add(orbitLine);
+        orbitLines.push(orbitLine);
+      }
+
+      // Nhãn HTML nổi
+      const labelEl = document.createElement("div");
+      labelEl.className = "planet-label";
+      labelEl.textContent = data.name;
+      labelEl.addEventListener("click", () => selectBody(idx));
+      labelsLayer.appendChild(labelEl);
+
+      // Nút chọn nhanh trên thanh điều hướng
+      const navBtn = document.createElement("button");
+      navBtn.className = "nav-btn";
+      navBtn.textContent = data.name;
+      navBtn.addEventListener("click", () => selectBody(idx));
+      quickNav.appendChild(navBtn);
+
+      bodyObjects.push({
+        data,
+        pivot,
+        mesh,
+        moonPivot,
+        angle: Math.random() * Math.PI * 2,
+        labelEl,
+        navBtn
+      });
+    });
+
+    // 6. TƯƠNG TÁC CHỌN THỰC THỂ & KHÓA CAMERA THEO QUỸ ĐẠO
+    let selectedIndex = -1;
+    let isCameraTransitioning = false;
+    const prevTrackedPos = new THREE.Vector3();
+    const desiredCamPos = new THREE.Vector3();
+
+    function selectBody(index) {
+      selectedIndex = index;
+      const item = bodyObjects[index];
+      const d = item.data;
+
+      bodyObjects.forEach((b, i) => {
+        b.labelEl.classList.toggle("active", i === index);
+        b.navBtn.classList.toggle("active", i === index);
+      });
+
+      // Cập nhật bảng thông tin chi tiết
+      document.getElementById("infoName").textContent = d.name;
+      document.getElementById("infoType").textContent = d.type;
+      document.getElementById("infoDesc").textContent = d.desc;
+      document.getElementById("infoFact").innerHTML = `<strong>Điểm đặc biệt:</strong> ${d.fact}`;
+
+      const specsContainer = document.getElementById("infoSpecs");
+      specsContainer.innerHTML = Object.entries(d.specs)
+        .map(([k, v]) => `<div class="spec-item"><span>${k}</span><strong>${v}</strong></div>`)
+        .join("");
+
+      document.getElementById("info-drawer").classList.add("open");
+
+      // Thiết lập điểm đến cho camera
+      const worldPos = new THREE.Vector3();
+      item.mesh.getWorldPosition(worldPos);
+      prevTrackedPos.copy(worldPos);
+
+      const viewDist = Math.max(d.visualRadius * 3.8 + 4, 8);
+      desiredCamPos.set(worldPos.x + viewDist * 0.7, worldPos.y + viewDist * 0.45, worldPos.z + viewDist * 0.7);
+      isCameraTransitioning = true;
+    }
+
+    function resetToOverview() {
+      selectedIndex = -1;
+      isCameraTransitioning = false;
+      bodyObjects.forEach(b => {
+        b.labelEl.classList.remove("active");
+        b.navBtn.classList.remove("active");
+      });
+      document.getElementById("info-drawer").classList.remove("open");
+      controls.target.set(0, 0, 0);
+      camera.position.set(0, 85, 165);
+    }
+
+    // Raycaster xử lý click chuột trực tiếp vào hành tinh 3D
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let pointerDownPos = { x: 0, y: 0 };
+
+    renderer.domElement.addEventListener("pointerdown", (e) => {
+      pointerDownPos = { x: e.clientX, y: e.clientY };
+    });
+
+    renderer.domElement.addEventListener("pointerup", (e) => {
+      const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+      if (dist > 5) return; // Bỏ qua nếu người dùng đang kéo xoay camera
+
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const hits = raycaster.intersectObjects(clickableMeshes);
+      if (hits.length > 0) {
+        selectBody(hits[0].object.userData.bodyIndex);
+      }
+    });
+
+    // 7. ĐIỀU KHIỂN GIAO DIỆN & VÒNG LẶP RENDER 60FPS
+    let isPaused = false;
+    let speedMultiplier = 1.0;
+    let showOrbits = true;
+    let showLabels = true;
+
+    document.getElementById("pauseBtn").addEventListener("click", (e) => {
+      isPaused = !isPaused;
+      e.target.textContent = isPaused ? "Tạm dừng" : "Đang chạy";
+      e.target.classList.toggle("on", !isPaused);
+    });
+
+    document.getElementById("speedSlider").addEventListener("input", (e) => {
+      speedMultiplier = parseFloat(e.target.value);
+      document.getElementById("speedLabel").textContent = `${speedMultiplier.toFixed(1)}x`;
+    });
+
+    document.getElementById("orbitToggle").addEventListener("click", (e) => {
+      showOrbits = !showOrbits;
+      orbitLines.forEach(line => line.visible = showOrbits);
+      e.target.classList.toggle("on", showOrbits);
+    });
+
+    document.getElementById("labelToggle").addEventListener("click", (e) => {
+      showLabels = !showLabels;
+      labelsLayer.style.display = showLabels ? "block" : "none";
+      e.target.classList.toggle("on", showLabels);
+    });
+
+    document.getElementById("resetViewBtn").addEventListener("click", resetToOverview);
+    document.getElementById("closeDrawer").addEventListener("click", () => {
+      document.getElementById("info-drawer").classList.remove("open");
+    });
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    const tempVec = new THREE.Vector3();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (!isPaused) {
+        asteroidBelt.rotation.y += 0.0005 * speedMultiplier;
+
+        bodyObjects.forEach((b) => {
+          if (b.data.distance > 0) {
+            b.angle += b.data.orbitSpeed * 0.25 * speedMultiplier;
+            b.mesh.position.x = Math.cos(b.angle) * b.data.distance;
+            b.mesh.position.z = Math.sin(b.angle) * b.data.distance;
+          }
+          b.mesh.rotation.y += b.data.rotationSpeed * Math.max(0.4, speedMultiplier * 0.5);
+          if (b.moonPivot) {
+            b.moonPivot.rotation.y += 0.04 * speedMultiplier;
+          }
+        });
+      }
+
+      // Cập nhật camera bám theo hành tinh đang được chọn
+      if (selectedIndex >= 0) {
+        const targetItem = bodyObjects[selectedIndex];
+        const currentPos = new THREE.Vector3();
+        targetItem.mesh.getWorldPosition(currentPos);
+
+        const delta = currentPos.clone().sub(prevTrackedPos);
+        camera.position.add(delta);
+        controls.target.add(delta);
+        desiredCamPos.add(delta);
+        prevTrackedPos.copy(currentPos);
+
+        if (isCameraTransitioning) {
+          controls.target.lerp(currentPos, 0.09);
+          camera.position.lerp(desiredCamPos, 0.07);
+          if (camera.position.distanceTo(desiredCamPos) < 0.35) {
+            isCameraTransitioning = false;
+          }
+        }
+      }
+
+      controls.update();
+
+      // Chiếu tọa độ 3D ra vị trí 2D cho các nhãn tên
+      if (showLabels) {
+        bodyObjects.forEach((b) => {
+          b.mesh.getWorldPosition(tempVec);
+          tempVec.y += b.data.visualRadius + 0.6;
+          tempVec.project(camera);
+
+          const isBehind = tempVec.z > 1;
+          if (isBehind) {
+            b.labelEl.style.display = "none";
+          } else {
+            b.labelEl.style.display = "block";
+            const x = (tempVec.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-tempVec.y * 0.5 + 0.5) * window.innerHeight;
+            b.labelEl.style.left = `${x}px`;
+            b.labelEl.style.top = `${y}px`;
+          }
+        });
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
